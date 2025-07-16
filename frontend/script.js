@@ -1,108 +1,107 @@
-// script.js
+const tableBody = document.querySelector('#deviceTable tbody');
+const form = document.getElementById('deviceForm');
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadCars();
-    document.getElementById('carForm').addEventListener('submit', handleSubmit);
-    document.getElementById('cancelBtn').addEventListener('click', resetForm);
-});
+let isEditing = false;
+let editId = null;
 
-const api = "http://localhost/Coding/CRUD/backend/";
-
-function loadCars() {
-    fetch(api)
-        .then(response => response.json())
+// Load all devices
+function fetchDevices() {
+    fetch('../index.php')
+        .then(res => res.json())
         .then(data => {
-            const carTableBody = document.getElementById('carTableBody');
-            carTableBody.innerHTML = '';
-
-            data.forEach(car => {
+            console.log("Fetched devices:", data);
+            tableBody.innerHTML = '';
+            data.forEach(device => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${car.make}</td>
-                    <td>${car.model}</td>
-                    <td>${car.year}</td>
-                    <td>$${parseFloat(car.price).toLocaleString()}</td>
-                    <td>${car.description}</td>
+                    <td>${device.name}</td>
+                    <td>${device.type}</td>
+                    <td>${device.price}</td>
                     <td>
-                        <button class="action-btn edit-btn" onclick="editCar(${car.id})">Edit</button>
-                        <button class="action-btn delete-btn" onclick="deleteCar(${car.id})">Delete</button>
+                        <button class="edit" 
+                            data-id="${device.id}" 
+                            data-name="${device.name}" 
+                            data-type="${device.type}" 
+                            data-price="${device.price}">
+                            Edit
+                        </button>
+                        <button class="delete" data-id="${device.id}">Delete</button>
                     </td>
                 `;
-                carTableBody.appendChild(row);
+                tableBody.appendChild(row);
             });
         })
-        .catch(error => console.error('Error:', error));
-}
-
-async function handleSubmit(e) {
-    e.preventDefault();
-
-    const carId = document.getElementById('carId').value;
-    const make = document.getElementById('make').value;
-    const model = document.getElementById('model').value;
-    const year = document.getElementById('year').value;
-    const price = document.getElementById('price').value;
-    const description = document.getElementById('description').value;
-
-    const data = { make, model, year, price, description };
-
-    const method = carId ? 'PUT' : 'POST';
-    const url = carId ? `${api}/${carId}` : 'php/index.php';
-
-    try {
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+        .catch(err => {
+            console.error("Error fetching devices:", err);
         });
-
-        const result = await response.json();
-        if (result.success) {
-            resetForm();
-            loadCars();
-        } else {
-            alert(result.message || 'An error occurred');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('An error occurred');
-    }
 }
 
-function editCar(id) {
-    fetch(`${api}/${carId}`)
-        .then(response => response.json())
-        .then(car => {
-            document.getElementById('carId').value = car.id;
-            document.getElementById('make').value = car.make;
-            document.getElementById('model').value = car.model;
-            document.getElementById('year').value = car.year;
-            document.getElementById('price').value = car.price;
-            document.getElementById('description').value = car.description;
-            document.getElementById('submitBtn').textContent = 'Update Car';
-            document.getElementById('cancelBtn').style.display = 'inline-block';
+// Handle form submission (Add or Update)
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('name').value;
+    const type = document.getElementById('type').value;
+    const price = document.getElementById('price').value;
+
+    const deviceData = { name, type, price };
+
+    const url = isEditing ? `../index.php?id=${editId}` : '../index.php';
+    const method = isEditing ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(deviceData)
+    })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                form.reset();
+                fetchDevices();
+                isEditing = false;
+                editId = null;
+                form.querySelector('button[type="submit"]').textContent = "Add Device";
+            } else {
+                alert("Failed to submit device.");
+            }
         })
-        .catch(error => console.error('Error:', error));
-}
+        .catch(err => {
+            console.error("Error submitting device:", err);
+        });
+});
 
-function deleteCar(id) {
-    if (confirm('Are you sure you want to delete this car?')) {
-        fetch(`${api}/${carId}}`, { method: 'DELETE' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    loadCars();
+// Handle delete and edit buttons
+tableBody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('delete')) {
+        const id = e.target.getAttribute('data-id');
+
+        fetch(`../index.php?id=${id}`, {
+            method: 'DELETE'
+        })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    fetchDevices();
                 } else {
-                    alert(data.message || 'An error occurred');
+                    alert("Failed to delete.");
                 }
             })
-            .catch(error => console.error('Error:', error));
+            .catch(err => {
+                console.error("Error deleting device:", err);
+            });
     }
-}
 
-function resetForm() {
-    document.getElementById('carForm').reset();
-    document.getElementById('carId').value = '';
-    document.getElementById('submitBtn').textContent = 'Add Car';
-    document.getElementById('cancelBtn').style.display = 'none';
-}
+    if (e.target.classList.contains('edit')) {
+        isEditing = true;
+        editId = e.target.getAttribute('data-id');
+
+        document.getElementById('name').value = e.target.getAttribute('data-name');
+        document.getElementById('type').value = e.target.getAttribute('data-type');
+        document.getElementById('price').value = e.target.getAttribute('data-price');
+
+        form.querySelector('button[type="submit"]').textContent = "Update Device";
+    }
+});
+
+// Initial load
+fetchDevices();
